@@ -8,6 +8,8 @@ import com.google.mlkit.genai.agent.AgentRunner
 import com.google.mlkit.genai.agent.AgentSession
 import com.google.mlkit.genai.agent.AgentTool
 import com.google.mlkit.genai.agent.AppFunctionAgentTools
+import com.google.mlkit.genai.common.DownloadStatus
+import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
 import android.util.Log
 import com.google.mlkit.genai.prompt.Content
@@ -24,7 +26,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 sealed interface ChatItem {
     data class User(val text: String) : ChatItem
@@ -41,6 +45,8 @@ data class AgentUiState(
     val items: List<ChatItem> = emptyList(),
     val streaming: String = "",
     val busy: Boolean = false,
+    /** Progress note shown while busy, for example a model download. */
+    val status: String? = null,
     val confirmation: PendingConfirmation? = null,
 )
 
@@ -105,7 +111,9 @@ class AgentViewModel : ViewModel() {
      * The default Gemini Nano model may not support tools ("Function calling
      * requested but feature parameters do not support capability"), so pick the
      * first model on this device that reports FUNCTION_CALLING. Preview models
-     * need the AICore Developer Preview.
+     * need the AICore Developer Preview and may still have to download; AICore
+     * doesn't answer feature queries for a model until it is on the device, so
+     * download it first and show progress.
      */
     private suspend fun functionCallingModel(): GenerativeModel {
         val candidates = listOf(
@@ -123,19 +131,78 @@ class AgentViewModel : ViewModel() {
                     }
                 },
             )
+            val label = "stage=$stage preference=$preference"
             val features = try {
-                model.getAvailableFeatures()
+                val status = withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.checkStatus() }
+                Log.i(TAG, "Model $label status=$status")
+                when (status) {
+                    FeatureStatus.AVAILABLE -> withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.getAvailableFeatures() }
+                    FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING ->
+                        if (download(model) && waitUntilAvailable(model)) {
+                            withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.getAvailableFeatures() }
+                        } else {
+                            null
+                        }
+                    else -> null
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "Model stage=$stage preference=$preference unavailable", e)
-                model.close()
-                continue
+                Log.w(TAG, "Model $label unavailable", e)
+                null
             }
-            Log.i(TAG, "Model stage=$stage preference=$preference status=${model.checkStatus()} features=$features")
-            if (Feature.FUNCTION_CALLING in features) return model
+            Log.i(TAG, "Model $label features=$features")
+            if (features != null && Feature.FUNCTION_CALLING in features) return model
             model.close()
         }
         throw NoFunctionCallingModel()
     }
+
+    /** Downloads [model] (or waits for a running download), reporting progress in the UI. */
+    private suspend fun download(model: GenerativeModel): Boolean {
+        var total = 0L
+        setStatus("Downloading the Gemini Nano model. This happens once.")
+        try {
+            model.download().collect { status ->
+                Log.i(TAG, "Download $status")
+                when (status) {
+                    is DownloadStatus.DownloadStarted -> total = status.bytesToDownload
+                    is DownloadStatus.DownloadProgress -> setStatus(
+                        if (total > 0) "Downloading the Gemini Nano model: ${status.totalBytesDownloaded * 100 / total}%"
+                        else "Downloading the Gemini Nano model: ${status.totalBytesDownloaded / 1_000_000} MB",
+                    )
+                    is DownloadStatus.DownloadFailed -> throw status.e
+                    is DownloadStatus.DownloadCompleted -> Unit
+                }
+            }
+            return true
+        } finally {
+            setStatus(null)
+        }
+    }
+
+    /**
+     * download() can finish while AICore is still fetching the model in the
+     * background (it returns right away when a download is already running),
+     * so poll until the model is ready.
+     */
+    private suspend fun waitUntilAvailable(model: GenerativeModel): Boolean {
+        setStatus("Waiting for Gemini Nano to finish downloading. Keep the phone on Wi-Fi.")
+        try {
+            return withTimeoutOrNull(DOWNLOAD_TIMEOUT_MS) {
+                while (true) {
+                    val status = model.checkStatus()
+                    Log.i(TAG, "Waiting for model, status=$status")
+                    if (status == FeatureStatus.AVAILABLE) return@withTimeoutOrNull true
+                    if (status == FeatureStatus.UNAVAILABLE) return@withTimeoutOrNull false
+                    delay(POLL_INTERVAL_MS)
+                }
+                @Suppress("UNREACHABLE_CODE") false
+            } ?: false
+        } finally {
+            setStatus(null)
+        }
+    }
+
+    private fun setStatus(text: String?) = _state.update { it.copy(status = text) }
 
     private suspend fun askUser(toolName: String, args: Map<String, Any>): Boolean {
         val answer = CompletableDeferred<Boolean>()
@@ -201,6 +268,9 @@ class AgentViewModel : ViewModel() {
 }
 
 private const val TAG = "AgentViewModel"
+private const val PROBE_TIMEOUT_MS = 10_000L
+private const val POLL_INTERVAL_MS = 3_000L
+private const val DOWNLOAD_TIMEOUT_MS = 30 * 60_000L
 
 private class NoFunctionCallingModel : Exception("No on-device model supports function calling")
 

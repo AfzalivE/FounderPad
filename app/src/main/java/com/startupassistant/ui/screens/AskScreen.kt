@@ -62,6 +62,7 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
     Column(modifier.fillMaxSize().padding(16.dp).imePadding()) {
         ScreenHeader("Ask", "An agent that runs on your phone with Gemini Nano. It uses the app's own tools.")
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        state.status?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp)) }
 
         LazyColumn(
             state = listState,
