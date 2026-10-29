@@ -165,9 +165,9 @@ abstract class StartupTools : AppFunctionService() {
      * @param location City name, or "Remote".
      */
     @AppFunctionDeclaration(isDescribedByKDoc = true)
-    suspend fun get_salary_range(role: String, level: String = "mid", location: String = "Remote"): SalaryInfo {
+    suspend fun get_salary_range(role: String, level: String? = null, location: String? = null): SalaryInfo {
         val roleId = resolveRole(role)
-        val s = AppGraph.hiring.salary(roleId, parseLevel(level), location)
+        val s = AppGraph.hiring.salary(roleId, parseLevel(level), location ?: "Remote")
         return SalaryInfo(
             role = AppGraph.hiring.roles().first { it.id == roleId }.title,
             level = s.level.name.lowercase(),
@@ -216,11 +216,13 @@ abstract class StartupTools : AppFunctionService() {
     suspend fun draft_job_post(
         role: String,
         companyName: String,
-        companyPitch: String = "",
-        level: String = "mid",
-        location: String = "Remote",
+        companyPitch: String? = null,
+        level: String? = null,
+        location: String? = null,
     ): JobPostDraft {
-        val post = AppGraph.hiring.draftJobPost(resolveRole(role), parseLevel(level), companyName, companyPitch, location)
+        val post = AppGraph.hiring.draftJobPost(
+            resolveRole(role), parseLevel(level), companyName, companyPitch.orEmpty(), location ?: "Remote",
+        )
         return JobPostDraft(post.title, post.body)
     }
 
@@ -233,9 +235,9 @@ abstract class StartupTools : AppFunctionService() {
      * @param date Date as YYYY-MM-DD. Empty for today.
      */
     @AppFunctionDeclaration(isDescribedByKDoc = true)
-    suspend fun add_transaction(description: String, amountUsd: Double, date: String = ""): TransactionResult {
+    suspend fun add_transaction(description: String, amountUsd: Double, date: String? = null): TransactionResult {
         val day = try {
-            if (date.isBlank()) LocalDate.now() else LocalDate.parse(date)
+            if (date.isNullOrBlank()) LocalDate.now() else LocalDate.parse(date)
         } catch (e: DateTimeParseException) {
             return TransactionResult(false, "", "Date must be YYYY-MM-DD.")
         }
@@ -292,8 +294,8 @@ abstract class StartupTools : AppFunctionService() {
             else -> null
         }
 
-        fun parseLevel(value: String): Level =
-            Level.entries.firstOrNull { it.name.equals(value.trim(), ignoreCase = true) } ?: Level.MID
+        fun parseLevel(value: String?): Level =
+            Level.entries.firstOrNull { it.name.equals(value?.trim(), ignoreCase = true) } ?: Level.MID
 
         /** Accepts an id or a loose name ("engineer", "designer", "sales") from the model. */
         fun resolveRole(value: String): String {
