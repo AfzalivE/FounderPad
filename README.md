@@ -44,6 +44,21 @@ The Events, Hiring and Books tabs work on any device with Android 8.0 (API 26) o
 ./gradlew :app:testDebugUnitTest
 ```
 
+The build needs JDK 21.
+
+### Get a debug APK from CI
+
+The `Debug APK` workflow builds the debug APK for each push to `main`, for
+each pull request, and when you start it manually.
+
+1. Open the **Actions** tab and select a green `Debug APK` run.
+2. Download the `founderpad-debug-<number>` artifact. It is a zip file.
+3. Unzip it and install `app-debug.apk` on the phone. You can use
+   `adb install -r app-debug.apk`, or open the file on the phone.
+
+Each CI run signs the APK with a new debug key. If an install fails with a
+signature error, remove the app from the phone first, then install again.
+
 Test a tool without the agent:
 
 ```
