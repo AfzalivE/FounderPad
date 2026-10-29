@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,6 +62,9 @@ To write a job post, first call get_salary_range, then draft_job_post.
 Only call add_transaction when the user clearly asks to record money in or out.
 Leave the date out of add_transaction unless the user names a date.
 """
+
+/** Tools whose result the Ask tab shows as a card (see AgentResults). */
+private val CARD_TOOLS = setOf("find_events", "get_runway")
 
 /** Tools that change data. The user confirms each call before it runs. */
 private val WRITE_TOOLS = setOf("add_transaction")
@@ -212,6 +216,12 @@ class AgentViewModel : ViewModel() {
             val content = Content.builder().text(text.trim()).build()
             try {
                 session().runAsync(content)
+                    // A card tool's result is the answer, so skip the model's
+                    // follow-up turn: on CPU it costs 20 to 40 seconds.
+                    .transformWhile { event ->
+                        emit(event)
+                        !(event is AgentEvent.FunctionResponse && shortName(event.name) in CARD_TOOLS)
+                    }
                     .catch { e -> addItem(ChatItem.Error(describe(e))) }
                     .collect { event ->
                         when (event) {
