@@ -6,6 +6,7 @@ composeBom = "2026.09.00"
 activityCompose = "1.11.0"
 lifecycle = "2.9.4"
 coreKtx = "1.17.0"
+graphicsShapes = "1.0.1"
 coroutines = "1.10.2"
 mlkitAgent = "1.0.0-alpha1"
 mlkitRewriting = "1.0.0-beta1"
@@ -22,6 +23,7 @@ compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-graphics-shapes = { module = "androidx.graphics:graphics-shapes", version.ref = "graphicsShapes" }
 compose-material-icons = { module = "androidx.compose.material:material-icons-extended" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-guava = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-guava", version.ref = "coroutines" }
