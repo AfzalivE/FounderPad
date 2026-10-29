@@ -12,6 +12,7 @@ import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
 import android.util.Log
+import java.time.LocalDate
 import com.google.mlkit.genai.prompt.Content
 import com.google.mlkit.genai.prompt.Feature
 import com.google.mlkit.genai.prompt.Generation
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -58,7 +60,11 @@ salaries, candidates or numbers. Keep answers short: at most five bullet points.
 If a tool says the data is sample data, say so once.
 To write a job post, first call get_salary_range, then draft_job_post.
 Only call add_transaction when the user clearly asks to record money in or out.
+Leave the date out of add_transaction unless the user names a date.
 """
+
+/** Tools whose result the Ask tab shows as a card (see AgentResults). */
+private val CARD_TOOLS = setOf("find_events", "get_runway")
 
 /** Tools that change data. The user confirms each call before it runs. */
 private val WRITE_TOOLS = setOf("add_transaction")
@@ -98,7 +104,8 @@ class AgentViewModel : ViewModel() {
         }
         val agent = Agent.builder()
             .setName("StartupAssistant")
-            .setInstructions(INSTRUCTIONS.trimIndent())
+            // The model has no clock, so give it today's date for add_transaction.
+            .setInstructions(INSTRUCTIONS.trimIndent() + "\nToday is ${LocalDate.now()}.")
             .addTools(tools)
             .setMaxTurns(6)
             .build()
@@ -209,6 +216,12 @@ class AgentViewModel : ViewModel() {
             val content = Content.builder().text(text.trim()).build()
             try {
                 session().runAsync(content)
+                    // A card tool's result is the answer, so skip the model's
+                    // follow-up turn: on CPU it costs 20 to 40 seconds.
+                    .transformWhile { event ->
+                        emit(event)
+                        !(event is AgentEvent.FunctionResponse && shortName(event.name) in CARD_TOOLS)
+                    }
                     .catch { e -> addItem(ChatItem.Error(describe(e))) }
                     .collect { event ->
                         when (event) {
