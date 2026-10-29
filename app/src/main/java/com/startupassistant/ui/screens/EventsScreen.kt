@@ -1,5 +1,7 @@
 package com.startupassistant.ui.screens
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -153,18 +155,27 @@ fun EventsScreen(modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EventCard(e: StartupEvent, modifier: Modifier = Modifier) {
+internal fun EventCard(e: StartupEvent, modifier: Modifier = Modifier, compact: Boolean = false) {
     val (container, content) = e.category.colors()
-    InfoCard(modifier) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    // Compact cards (in Ask) show the description only after a tap.
+    var expanded by rememberSaveable(e.id) { mutableStateOf(!compact) }
+    InfoCard(
+        modifier
+            .animateContentSize()
+            .then(if (compact) Modifier.clickable { expanded = !expanded } else Modifier),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp)) {
             // Calendar tile
             Surface(color = container, contentColor = content, shape = MaterialTheme.shapes.medium) {
                 Column(
-                    Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    Modifier.padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 6.dp else 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(e.startsAt.format(monthFormat).uppercase(), style = MaterialTheme.typography.labelMedium)
-                    Text(e.startsAt.dayOfMonth.toString(), style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        e.startsAt.dayOfMonth.toString(),
+                        style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                    )
                 }
             }
             Column(Modifier.weight(1f)) {
@@ -180,11 +191,12 @@ private fun EventCard(e: StartupEvent, modifier: Modifier = Modifier) {
                 )
             }
         }
+        if (!expanded) return@InfoCard
         Text(
             e.description,
             Modifier.padding(top = 12.dp),
             style = MaterialTheme.typography.bodyMedium,
-            maxLines = 3,
+            maxLines = if (compact) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
         )
         FlowRow(

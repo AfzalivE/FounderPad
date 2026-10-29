@@ -1,5 +1,15 @@
 package com.startupassistant.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyListState
+import com.startupassistant.ai.PendingConfirmation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -99,29 +109,49 @@ private fun toolLabel(name: String) =
 private fun humanize(key: String): String =
     key.replace(Regex("([a-z])([A-Z])"), "$1 $2").replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
 
-/** A chat row as shown: a tool call and its result fold into one step. */
+/** A chat row as shown: a run of tool calls folds into one step per tool. */
 private sealed interface ChatLine {
     data class Item(val item: ChatItem) : ChatLine
     data class ToolStep(val name: String, val done: Boolean) : ChatLine
+    data class Result(val result: AgentResult) : ChatLine
 }
 
 private fun foldTools(items: List<ChatItem>): List<ChatLine> {
-    val consumed = BooleanArray(items.size)
+    // Replies that are only function-call markup vanish, so the calls around them form one run.
+    val visible = items.mapNotNull { item ->
+        if (item !is ChatItem.Assistant) item
+        else cleanAgentText(item.text).takeIf { it.isNotBlank() }?.let { ChatItem.Assistant(it) }
+    }
     val rows = mutableListOf<ChatLine>()
-    items.forEachIndexed { i, item ->
-        when (item) {
-            is ChatItem.ToolCall -> {
-                val doneAt = (i + 1 until items.size).firstOrNull { j ->
-                    !consumed[j] && (items[j] as? ChatItem.ToolDone)?.name == item.name
-                }
-                if (doneAt != null) consumed[doneAt] = true
-                rows += ChatLine.ToolStep(item.name, done = doneAt != null)
+    var shownResults = false
+    var i = 0
+    while (i < visible.size) {
+        val item = visible[i]
+        if (item !is ChatItem.ToolCall && item !is ChatItem.ToolDone) {
+            when (item) {
+                is ChatItem.User -> { shownResults = false; rows += ChatLine.Item(item) }
+                // The cards answer the turn, so its text reply is not shown.
+                is ChatItem.Assistant -> if (!shownResults) rows += ChatLine.Item(item)
+                else -> rows += ChatLine.Item(item)
             }
-            is ChatItem.ToolDone -> if (!consumed[i]) rows += ChatLine.ToolStep(item.name, done = true)
-            is ChatItem.Assistant -> cleanAgentText(item.text).takeIf { it.isNotBlank() }
-                ?.let { rows += ChatLine.Item(ChatItem.Assistant(it)) }
-            else -> rows += ChatLine.Item(item)
+            i++
+            continue
         }
+        var end = i
+        while (end < visible.size && (visible[end] is ChatItem.ToolCall || visible[end] is ChatItem.ToolDone)) end++
+        val run = visible.subList(i, end)
+        val names = run.map { (it as? ChatItem.ToolCall)?.name ?: (it as ChatItem.ToolDone).name }.distinct()
+        for (name in names) {
+            val calls = run.filterIsInstance<ChatItem.ToolCall>().filter { it.name == name }
+            val doneCount = run.count { it is ChatItem.ToolDone && it.name == name }
+            val done = doneCount >= calls.size
+            rows += ChatLine.ToolStep(name, done)
+            if (done) agentResult(name, calls.map { it.args })?.let {
+                rows += ChatLine.Result(it)
+                shownResults = true
+            }
+        }
+        i = end
     }
     return rows
 }
@@ -155,7 +185,9 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
     val rows = remember(state.items) { foldTools(state.items) }
-    val streaming = remember(state.streaming) { cleanAgentText(state.streaming) }
+    // A reply that follows result cards stays hidden, like the stored one.
+    val turnHasCards = rows.lastOrNull { it is ChatLine.Result || (it as? ChatLine.Item)?.item is ChatItem.User } is ChatLine.Result
+    val streaming = remember(state.streaming, turnHasCards) { if (turnHasCards) "" else cleanAgentText(state.streaming) }
     val empty = state.items.isEmpty() && state.streaming.isEmpty()
     val thinking = state.busy && streaming.isEmpty()
 
@@ -184,39 +216,27 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
             }
         }
 
-        LazyColumn(
-            state = listState,
+        // The empty state leaves before the chat comes in, so the two never overlap.
+        AnimatedContent(
+            targetState = empty,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (empty) {
-                item(key = "hero") { Hero(Modifier.animateItem()) }
-                itemsIndexed(suggestions, key = { _, s -> s.text }) { i, s ->
-                    SuggestionCard(s, onClick = { send(s.text) }, modifier = Modifier.animateItem().enterStagger(i + 2))
-                }
-            }
-            itemsIndexed(rows) { _, row ->
-                when (row) {
-                    is ChatLine.Item -> ChatRow(row.item, Modifier.animateItem().enterStagger(0))
-                    is ChatLine.ToolStep -> ToolPill(row.name, row.done, Modifier.animateItem().enterStagger(0))
-                }
-            }
-            if (streaming.isNotEmpty()) {
-                item(key = "streaming") {
-                    Bubble(streaming, fromUser = false, modifier = Modifier.animateItem())
-                }
-            }
-            if (thinking) {
-                item(key = "thinking") {
-                    Row(
-                        Modifier.animateItem().enterStagger(0).padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        LoadingIndicator(Modifier.size(40.dp))
-                        Text("Thinking…", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            transitionSpec = {
+                (fadeIn(tween(220, delayMillis = 120)) togetherWith
+                    (fadeOut(tween(150)) + slideOutVertically { -it / 8 } + scaleOut(targetScale = 0.96f)))
+                    .using(SizeTransform(clip = true))
+            },
+            label = "askContent",
+        ) { isEmpty ->
+            if (isEmpty) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Hero()
+                    suggestions.forEachIndexed { i, s ->
+                        // Taps after the first are ignored while that question runs.
+                        SuggestionCard(s, enabled = !state.busy, onClick = { send(s.text) }, modifier = Modifier.enterStagger(i + 2))
                     }
                 }
+            } else {
+                ChatList(listState, rows, streaming, thinking)
             }
         }
 
@@ -228,20 +248,59 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
         )
     }
 
-    state.confirmation?.let { pending ->
-        AlertDialog(
-            onDismissRequest = { vm.answerConfirmation(false) },
-            icon = { Icon(Icons.Filled.Receipt, contentDescription = null) },
-            title = { Text("Record this transaction?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    pending.args.forEach { (key, value) -> ArgRow(argLabel(key), argValue(key, value)) }
+    state.confirmation?.let { pending -> ConfirmDialog(pending, onAnswer = vm::answerConfirmation) }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ChatList(listState: LazyListState, rows: List<ChatLine>, streaming: String, thinking: Boolean) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        // Index keys let the streaming reply turn into its final row in place.
+        itemsIndexed(rows, key = { i, _ -> i }) { _, row ->
+            when (row) {
+                is ChatLine.Item -> ChatRow(row.item, Modifier.animateItem().enterStagger(0))
+                is ChatLine.ToolStep -> ToolPill(row.name, row.done, Modifier.animateItem().enterStagger(0))
+                is ChatLine.Result -> AgentResultView(row.result, Modifier.animateItem())
+            }
+        }
+        if (streaming.isNotEmpty()) {
+            item(key = rows.size) {
+                Bubble(streaming, fromUser = false, modifier = Modifier.animateItem())
+            }
+        }
+        if (thinking) {
+            item(key = "thinking") {
+                Row(
+                    Modifier.animateItem().enterStagger(0).padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LoadingIndicator(Modifier.size(40.dp))
+                    Text("Thinking…", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            },
-            confirmButton = { TextButton(onClick = { vm.answerConfirmation(true) }) { Text("Record") } },
-            dismissButton = { TextButton(onClick = { vm.answerConfirmation(false) }) { Text("Cancel") } },
-        )
+            }
+        }
     }
+}
+
+@Composable
+private fun ConfirmDialog(pending: PendingConfirmation, onAnswer: (Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { onAnswer(false) },
+        icon = { Icon(Icons.Filled.Receipt, contentDescription = null) },
+        title = { Text("Record this transaction?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                pending.args.forEach { (key, value) -> ArgRow(argLabel(key), argValue(key, value)) }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onAnswer(true) }) { Text("Record") } },
+        dismissButton = { TextButton(onClick = { onAnswer(false) }) { Text("Cancel") } },
+    )
 }
 
 private fun argLabel(key: String) = when (key) {
@@ -301,9 +360,10 @@ private fun Hero(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SuggestionCard(s: Suggestion, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SuggestionCard(s: Suggestion, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = modifier.fillMaxWidth(),
@@ -447,3 +507,4 @@ private fun markdown(text: String): AnnotatedString = buildAnnotatedString {
         append(line.substring(last))
     }
 }
+

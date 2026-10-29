@@ -211,7 +211,7 @@ fun BooksScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CashHero(cashCents: Long, burnCents: Long, runwayMonths: Double?, modifier: Modifier = Modifier) {
+internal fun CashHero(cashCents: Long, burnCents: Long, runwayMonths: Double?, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     Card(
         modifier.fillMaxWidth(),
