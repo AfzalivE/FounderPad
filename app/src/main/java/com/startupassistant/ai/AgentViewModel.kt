@@ -9,7 +9,15 @@ import com.google.mlkit.genai.agent.AgentSession
 import com.google.mlkit.genai.agent.AgentTool
 import com.google.mlkit.genai.agent.AppFunctionAgentTools
 import com.google.mlkit.genai.common.GenAiException
+import android.util.Log
 import com.google.mlkit.genai.prompt.Content
+import com.google.mlkit.genai.prompt.Feature
+import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.GenerativeModel
+import com.google.mlkit.genai.prompt.ModelPreference
+import com.google.mlkit.genai.prompt.ModelReleaseStage
+import com.google.mlkit.genai.prompt.generationConfig
+import com.google.mlkit.genai.prompt.modelConfig
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,9 +96,45 @@ class AgentViewModel : ViewModel() {
             .addTools(tools)
             .setMaxTurns(6)
             .build()
-        return AgentRunner(agent).also { runner = it }
+        return AgentRunner(agent, functionCallingModel()).also { runner = it }
             .getOrCreateSession("founder_chat")
             .also { session = it }
+    }
+
+    /**
+     * The default Gemini Nano model may not support tools ("Function calling
+     * requested but feature parameters do not support capability"), so pick the
+     * first model on this device that reports FUNCTION_CALLING. Preview models
+     * need the AICore Developer Preview.
+     */
+    private suspend fun functionCallingModel(): GenerativeModel {
+        val candidates = listOf(
+            ModelReleaseStage.STABLE to ModelPreference.FULL,
+            ModelReleaseStage.STABLE to ModelPreference.FAST,
+            ModelReleaseStage.PREVIEW to ModelPreference.FULL,
+            ModelReleaseStage.PREVIEW to ModelPreference.FAST,
+        )
+        for ((stage, preference) in candidates) {
+            val model = Generation.getClient(
+                generationConfig {
+                    modelConfig = modelConfig {
+                        releaseStage = stage
+                        this.preference = preference
+                    }
+                },
+            )
+            val features = try {
+                model.getAvailableFeatures()
+            } catch (e: Exception) {
+                Log.w(TAG, "Model stage=$stage preference=$preference unavailable", e)
+                model.close()
+                continue
+            }
+            Log.i(TAG, "Model stage=$stage preference=$preference status=${model.checkStatus()} features=$features")
+            if (Feature.FUNCTION_CALLING in features) return model
+            model.close()
+        }
+        throw NoFunctionCallingModel()
     }
 
     private suspend fun askUser(toolName: String, args: Map<String, Any>): Boolean {
@@ -139,7 +183,9 @@ class AgentViewModel : ViewModel() {
         if (it.streaming.isBlank()) it else it.copy(items = it.items + ChatItem.Assistant(it.streaming.trim()), streaming = "")
     }
 
-    private fun describe(e: Throwable): String = when ((e as? GenAiException)?.errorCode) {
+    private fun describe(e: Throwable): String = if (e is NoFunctionCallingModel) {
+        "The Gemini Nano model on this device does not support tools yet. Join the AICore Developer Preview to get a model that does. The Events, Hiring and Books tabs still work."
+    } else when ((e as? GenAiException)?.errorCode) {
         GenAiException.ErrorCode.NOT_AVAILABLE ->
             "On-device AI is not available. This feature needs a device with Gemini Nano (for example Pixel 9 or later) in the AICore Developer Preview. The Events, Hiring and Books tabs still work."
         GenAiException.ErrorCode.BUSY -> "On-device AI is busy. Try again in a few seconds."
@@ -153,6 +199,10 @@ class AgentViewModel : ViewModel() {
         runner?.close()
     }
 }
+
+private const val TAG = "AgentViewModel"
+
+private class NoFunctionCallingModel : Exception("No on-device model supports function calling")
 
 /** "com.startupassistant.StartupTools#find_events" -> "find_events" */
 internal fun shortName(name: String) = name.substringAfterLast('#').substringAfterLast('.')
