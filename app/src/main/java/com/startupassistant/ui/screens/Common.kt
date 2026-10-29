@@ -83,7 +83,7 @@ fun ShapeBadge(
     colors: List<Color> = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary),
     iconTint: Color = MaterialTheme.colorScheme.onPrimary,
 ) {
-    val shape = remember(polygon) { polygon.toShape() }
+    val shape = polygon.toShape()
     val rotation = if (spin) {
         val t = rememberInfiniteTransition(label = "spin")
         t.animateFloat(0f, 360f, infiniteRepeatable(tween(14_000, easing = LinearEasing)), label = "angle").value
@@ -172,7 +172,7 @@ fun InfoCard(
 @Composable
 fun InitialsAvatar(name: String, index: Int, modifier: Modifier = Modifier) {
     val polygons = TabShapes.avatars
-    val shape = remember(index) { polygons[index % polygons.size].toShape() }
+    val shape = polygons[index % polygons.size].toShape()
     val palette = listOf(
         MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
         MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer,
