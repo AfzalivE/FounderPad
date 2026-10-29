@@ -37,7 +37,11 @@ android {
 }
 
 kotlin {
-    jvmToolchain(17)
+    // Target Java 17 bytecode with whatever JDK runs Gradle, so the build
+    // doesn't require a separately installed JDK 17 toolchain.
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
 }
 
 ksp {
