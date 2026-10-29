@@ -31,11 +31,13 @@ import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.startupassistant.AppGraph
 import com.startupassistant.data.EventCategory
 import com.startupassistant.data.EventQuery
@@ -80,7 +83,23 @@ fun EventsScreen(modifier: Modifier = Modifier) {
     var text by rememberSaveable { mutableStateOf("") }
     var city by rememberSaveable { mutableStateOf("") }
     var freeOnly by rememberSaveable { mutableStateOf(false) }
-    val events = remember(category, text, city, freeOnly) {
+    var loadingLive by remember { mutableStateOf(false) }
+    val allEvents by AppGraph.events.eventsFlow.collectAsStateWithLifecycle()
+
+    LaunchedEffect(city, text) {
+        loadingLive = true
+        try {
+            AppGraph.events.refresh(
+                targetCity = city.ifBlank { "San Francisco" },
+                coreSkill = text,
+                missionAndValueProp = text,
+            )
+        } finally {
+            loadingLive = false
+        }
+    }
+
+    val events = remember(allEvents, category, text, city, freeOnly) {
         AppGraph.events.search(EventQuery(text = text, category = category, city = city, freeOnly = freeOnly))
     }
 
@@ -91,7 +110,10 @@ fun EventsScreen(modifier: Modifier = Modifier) {
         item(key = "header") {
             Column {
                 ScreenHeader("Events", "Meet other founders, find investors and find a place to work.", Icons.Filled.Event, TabShapes.events)
-                SampleDataNote("The Luma API needs a paid plan and shows only your own calendars.")
+                SampleDataNote("Powered by Firebase AI Google Search Grounding & live Luma public discovery.")
+                if (loadingLive) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                }
                 Row(
                     Modifier.horizontalScroll(rememberScrollState()).enterStagger(2),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -206,6 +228,7 @@ internal fun EventCard(e: StartupEvent, modifier: Modifier = Modifier, compact: 
         ) {
             Tag(e.category.label, e.category.icon, container, content)
             Tag(e.host, null, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
+            Tag(e.sourcePlatform, null, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
             e.tags.forEach { Tag("#$it", null, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }

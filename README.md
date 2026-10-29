@@ -10,7 +10,7 @@ Apps platform.
 | Tab | What it does | Data |
 | --- | --- | --- |
 | Ask | Chat with an agent that runs on the phone. It calls the app's tools and shows each tool call. Before it records a transaction, it asks you to confirm. | ML Kit GenAI agent (`genai-agent`), Gemini Nano |
-| Events | Find events to meet people, meet investors and find office space. Filter by type, text, city and price. | Mock. The Luma API needs Luma Plus and reads only calendars you own, so it cannot search public events. |
+| Events | Find events to meet people, meet investors and find office space. Filter by type, text, city and price. | Live discovery via `FounderEventDiscoveryService`: Firebase AI Logic (`gemini-3.8-flash` + `Tool.googleSearch()` grounding) & Luma public discovery endpoint (`api.lu.ma/discover/get-paginated-events`), with offline seed fallback. |
 | Hiring | Salary and equity ranges by role, level and city. Write a job post, then rewrite it on device (Professional, Friendly, Shorter). See candidates and a hiring checklist. | Mock data. Rewriting uses ML Kit GenAI Rewriting (`genai-rewriting`). |
 | Books | Add money in and out (auto-categorized). See cash, monthly burn, runway, expenses by category and a monthly table. | Mock, in memory |
 
