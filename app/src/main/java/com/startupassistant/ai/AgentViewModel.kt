@@ -108,66 +108,52 @@ class AgentViewModel : ViewModel() {
     }
 
     /**
-     * The default Gemini Nano model may not support tools ("Function calling
-     * requested but feature parameters do not support capability"), so pick the
-     * first model on this device that reports FUNCTION_CALLING. Preview models
-     * need the AICore Developer Preview and may still have to download; AICore
-     * doesn't answer feature queries for a model until it is on the device, so
-     * download it first and show progress.
+     * Function calling needs Gemini Nano 4 Fast (preview stage, fast preference,
+     * from the AICore Developer Preview); the default stable model rejects tools
+     * ("Function calling requested but feature parameters do not support
+     * capability"). AICore doesn't answer queries for a model that isn't on the
+     * device yet, so check its status first and download it, showing progress.
      */
     private suspend fun functionCallingModel(): GenerativeModel {
-        val candidates = listOf(
-            ModelReleaseStage.STABLE to ModelPreference.FULL,
-            ModelReleaseStage.STABLE to ModelPreference.FAST,
-            ModelReleaseStage.PREVIEW to ModelPreference.FULL,
-            ModelReleaseStage.PREVIEW to ModelPreference.FAST,
-        )
-        for ((stage, preference) in candidates) {
-            val model = Generation.getClient(
-                generationConfig {
-                    modelConfig = modelConfig {
-                        releaseStage = stage
-                        this.preference = preference
-                    }
-                },
-            )
-            val label = "stage=$stage preference=$preference"
-            val features = try {
-                val status = withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.checkStatus() }
-                Log.i(TAG, "Model $label status=$status")
-                when (status) {
-                    FeatureStatus.AVAILABLE -> withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.getAvailableFeatures() }
-                    FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING ->
-                        if (download(model) && waitUntilAvailable(model)) {
-                            withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.getAvailableFeatures() }
-                        } else {
-                            null
-                        }
-                    else -> null
+        val model = Generation.getClient(
+            generationConfig {
+                modelConfig = modelConfig {
+                    releaseStage = ModelReleaseStage.PREVIEW
+                    preference = ModelPreference.FAST
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Model $label unavailable", e)
-                null
+            },
+        )
+        try {
+            val status = withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.checkStatus() }
+            Log.i(TAG, "Gemini Nano 4 Fast status=$status")
+            val ready = when (status) {
+                FeatureStatus.AVAILABLE -> true
+                FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING -> download(model) && waitUntilAvailable(model)
+                else -> false
             }
-            Log.i(TAG, "Model $label features=$features")
-            if (features != null && Feature.FUNCTION_CALLING in features) return model
+            if (!ready) throw NoFunctionCallingModel()
+            val features = withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.getAvailableFeatures() }
+            Log.i(TAG, "Gemini Nano 4 Fast features=$features")
+            if (features != null && Feature.FUNCTION_CALLING !in features) throw NoFunctionCallingModel()
+            return model
+        } catch (e: Exception) {
             model.close()
+            throw e
         }
-        throw NoFunctionCallingModel()
     }
 
     /** Downloads [model] (or waits for a running download), reporting progress in the UI. */
     private suspend fun download(model: GenerativeModel): Boolean {
         var total = 0L
-        setStatus("Downloading the Gemini Nano model. This happens once.")
+        setStatus("Downloading Gemini Nano 4. This happens once.")
         try {
             model.download().collect { status ->
                 Log.i(TAG, "Download $status")
                 when (status) {
                     is DownloadStatus.DownloadStarted -> total = status.bytesToDownload
                     is DownloadStatus.DownloadProgress -> setStatus(
-                        if (total > 0) "Downloading the Gemini Nano model: ${status.totalBytesDownloaded * 100 / total}%"
-                        else "Downloading the Gemini Nano model: ${status.totalBytesDownloaded / 1_000_000} MB",
+                        if (total > 0) "Downloading Gemini Nano 4: ${status.totalBytesDownloaded * 100 / total}%"
+                        else "Downloading Gemini Nano 4: ${status.totalBytesDownloaded / 1_000_000} MB",
                     )
                     is DownloadStatus.DownloadFailed -> throw status.e
                     is DownloadStatus.DownloadCompleted -> Unit
@@ -185,7 +171,7 @@ class AgentViewModel : ViewModel() {
      * so poll until the model is ready.
      */
     private suspend fun waitUntilAvailable(model: GenerativeModel): Boolean {
-        setStatus("Waiting for Gemini Nano to finish downloading. Keep the phone on Wi-Fi.")
+        setStatus("Downloading Gemini Nano 4. Keep the phone on Wi-Fi.")
         try {
             return withTimeoutOrNull(DOWNLOAD_TIMEOUT_MS) {
                 while (true) {
@@ -251,7 +237,7 @@ class AgentViewModel : ViewModel() {
     }
 
     private fun describe(e: Throwable): String = if (e is NoFunctionCallingModel) {
-        "The Gemini Nano model on this device does not support tools yet. Join the AICore Developer Preview to get a model that does. The Events, Hiring and Books tabs still work."
+        "Gemini Nano 4 Fast is not available on this device. It needs the AICore Developer Preview on a supported phone. The Events, Hiring and Books tabs still work."
     } else when ((e as? GenAiException)?.errorCode) {
         GenAiException.ErrorCode.NOT_AVAILABLE ->
             "On-device AI is not available. This feature needs a device with Gemini Nano (for example Pixel 9 or later) in the AICore Developer Preview. The Events, Hiring and Books tabs still work."
