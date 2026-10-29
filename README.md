@@ -1,4 +1,4 @@
-# Startup Assistant
+# FounderPad
 
 An Android app that helps a new founder get started. It has an on-device agent
 (Gemini Nano through ML Kit GenAI) whose tools are the app's own AppFunctions.

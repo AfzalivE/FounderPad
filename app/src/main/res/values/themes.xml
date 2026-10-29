@@ -1,3 +1,4 @@
 <resources>
-    <style name="Theme.StartupAssistant" parent="android:Theme.Material.NoActionBar" />
+    <style name="Theme.FounderPad" parent="android:Theme.Material.NoActionBar" />
+    <style name="Theme.StartupAssistant" parent="Theme.FounderPad" />
 </resources>

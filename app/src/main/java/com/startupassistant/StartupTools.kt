@@ -36,9 +36,9 @@ data class EventInfo(
     /** One-sentence summary. */
     val description: String,
     /** Direct registration URL on Luma, Meetup, Eventbrite or the web. */
-    val registrationUrl: String = "",
+    val registrationUrl: String,
     /** Source platform, for example "Luma" or "Google Search Grounded". */
-    val sourcePlatform: String = "",
+    val sourcePlatform: String,
 )
 
 /** Result of an event search. */
