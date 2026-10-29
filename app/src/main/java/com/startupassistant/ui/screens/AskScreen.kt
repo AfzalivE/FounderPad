@@ -1,5 +1,6 @@
 package com.startupassistant.ui.screens
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -22,12 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material3.AlertDialog
@@ -45,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,6 +54,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,6 +76,70 @@ private val suggestions = listOf(
     Suggestion("Log a $49 Figma bill", Icons.Filled.Receipt),
 )
 
+private data class ToolLabel(val text: String, val icon: ImageVector)
+
+private val toolLabels = mapOf(
+    "find_events" to ToolLabel("Searching events", Icons.Filled.Event),
+    "get_salary_range" to ToolLabel("Checking salaries", Icons.Filled.Payments),
+    "find_candidates" to ToolLabel("Finding candidates", Icons.Filled.PersonSearch),
+    "draft_job_post" to ToolLabel("Writing a job post", Icons.Filled.EditNote),
+    "get_runway" to ToolLabel("Checking your runway", Icons.Filled.Savings),
+    "add_transaction" to ToolLabel("Recording a transaction", Icons.Filled.Receipt),
+)
+
+private fun toolLabel(name: String) =
+    toolLabels[name] ?: ToolLabel(humanize(name), Icons.Filled.AutoAwesome)
+
+/** "amountUsd" or "amount_usd" -> "Amount usd" */
+private fun humanize(key: String): String =
+    key.replace(Regex("([a-z])([A-Z])"), "$1 $2").replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
+
+/** A chat row as shown: a tool call and its result fold into one step. */
+private sealed interface ChatLine {
+    data class Item(val item: ChatItem) : ChatLine
+    data class ToolStep(val name: String, val done: Boolean) : ChatLine
+}
+
+private fun foldTools(items: List<ChatItem>): List<ChatLine> {
+    val consumed = BooleanArray(items.size)
+    val rows = mutableListOf<ChatLine>()
+    items.forEachIndexed { i, item ->
+        when (item) {
+            is ChatItem.ToolCall -> {
+                val doneAt = (i + 1 until items.size).firstOrNull { j ->
+                    !consumed[j] && (items[j] as? ChatItem.ToolDone)?.name == item.name
+                }
+                if (doneAt != null) consumed[doneAt] = true
+                rows += ChatLine.ToolStep(item.name, done = doneAt != null)
+            }
+            is ChatItem.ToolDone -> if (!consumed[i]) rows += ChatLine.ToolStep(item.name, done = true)
+            is ChatItem.Assistant -> cleanAgentText(item.text).takeIf { it.isNotBlank() }
+                ?.let { rows += ChatLine.Item(ChatItem.Assistant(it)) }
+            else -> rows += ChatLine.Item(item)
+        }
+    }
+    return rows
+}
+
+private val toolNames = toolLabels.keys.joinToString("|")
+private val markupPatterns = listOf(
+    // Fenced tool code or JSON blocks.
+    Regex("```(?:tool_code|tool_call|json|python)?\\s*[\\s\\S]*?```"),
+    // Tagged function-call markup.
+    Regex("<(start_function_call|tool_call|function_call)>[\\s\\S]*?(<(end_function_call|/tool_call|/function_call)>|$)"),
+    Regex("<(start|end)_function_(call|response)>|</?escape>|<ctrl\\d+>"),
+    // JSON objects that name a tool or carry args.
+    Regex("\\{[^{}]*\"(name|function|tool|args|arguments|parameters)\"\\s*:(?:[^{}]|\\{[^{}]*\\})*\\}"),
+    // Bare calls such as print(default_api.find_events(query="x")) or call:find_events{...}.
+    Regex("(?m)^.*\\b(call:)?(default_api\\.)?($toolNames)\\s*[({].*$"),
+)
+
+/** Removes function-call markup the model sometimes writes into its reply. */
+private fun cleanAgentText(text: String): String =
+    markupPatterns.fold(text) { acc, r -> acc.replace(r, "") }
+        .replace(Regex("\n{3,}"), "\n\n")
+        .trim()
+
 private val UserBubble = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp)
 private val AgentBubble = RoundedCornerShape(24.dp, 24.dp, 24.dp, 6.dp)
 
@@ -78,11 +149,13 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val rows = remember(state.items) { foldTools(state.items) }
+    val streaming = remember(state.streaming) { cleanAgentText(state.streaming) }
     val empty = state.items.isEmpty() && state.streaming.isEmpty()
-    val thinking = state.busy && state.streaming.isEmpty()
+    val thinking = state.busy && streaming.isEmpty()
 
-    LaunchedEffect(state.items.size, state.streaming, thinking) {
-        val count = state.items.size + (if (state.streaming.isNotEmpty()) 1 else 0) + (if (thinking) 1 else 0)
+    LaunchedEffect(rows.size, streaming, thinking) {
+        val count = rows.size + (if (streaming.isNotEmpty()) 1 else 0) + (if (thinking) 1 else 0)
         if (!empty && count > 0) listState.animateScrollToItem(count - 1)
     }
 
@@ -106,12 +179,15 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
                     SuggestionCard(s, onClick = { send(s.text) }, modifier = Modifier.animateItem().enterStagger(i + 2))
                 }
             }
-            itemsIndexed(state.items) { _, item ->
-                ChatRow(item, Modifier.animateItem().enterStagger(0))
+            itemsIndexed(rows) { _, row ->
+                when (row) {
+                    is ChatLine.Item -> ChatRow(row.item, Modifier.animateItem().enterStagger(0))
+                    is ChatLine.ToolStep -> ToolPill(row.name, row.done, Modifier.animateItem().enterStagger(0))
+                }
             }
-            if (state.streaming.isNotEmpty()) {
+            if (streaming.isNotEmpty()) {
                 item(key = "streaming") {
-                    Bubble(state.streaming, fromUser = false, modifier = Modifier.animateItem())
+                    Bubble(streaming, fromUser = false, modifier = Modifier.animateItem())
                 }
             }
             if (thinking) {
@@ -142,13 +218,40 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
             icon = { Icon(Icons.Filled.Receipt, contentDescription = null) },
             title = { Text("Record this transaction?") },
             text = {
-                Text(
-                    pending.args.entries.joinToString("\n") { (k, v) -> "$k: $v" },
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pending.args.forEach { (key, value) -> ArgRow(argLabel(key), argValue(key, value)) }
+                }
             },
             confirmButton = { TextButton(onClick = { vm.answerConfirmation(true) }) { Text("Record") } },
             dismissButton = { TextButton(onClick = { vm.answerConfirmation(false) }) { Text("Cancel") } },
         )
+    }
+}
+
+private fun argLabel(key: String) = when (key) {
+    "amountUsd" -> "Amount"
+    else -> humanize(key)
+}
+
+private fun argValue(key: String, value: Any): String = when {
+    key == "amountUsd" && value is Number -> {
+        val amount = value.toDouble()
+        (if (amount < 0) "-$" else "$") + "%,.2f".format(kotlin.math.abs(amount))
+    }
+    value is Double && value % 1.0 == 0.0 -> value.toLong().toString()
+    else -> value.toString()
+}
+
+@Composable
+private fun ArgRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.widthIn(min = 96.dp),
+        )
+        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
     }
 }
 
@@ -246,8 +349,8 @@ private fun ChatRow(item: ChatItem, modifier: Modifier = Modifier) {
     when (item) {
         is ChatItem.User -> Bubble(item.text, fromUser = true, modifier = modifier)
         is ChatItem.Assistant -> Bubble(item.text, fromUser = false, modifier = modifier)
-        is ChatItem.ToolCall -> ToolPill(Icons.Filled.Build, "Using ${item.name}", done = false, modifier = modifier)
-        is ChatItem.ToolDone -> ToolPill(Icons.Filled.CheckCircle, "Got results from ${item.name}", done = true, modifier = modifier)
+        is ChatItem.ToolCall -> ToolPill(item.name, done = false, modifier = modifier)
+        is ChatItem.ToolDone -> ToolPill(item.name, done = true, modifier = modifier)
         is ChatItem.Error -> Surface(
             color = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -262,8 +365,10 @@ private fun ChatRow(item: ChatItem, modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ToolPill(icon: ImageVector, text: String, done: Boolean, modifier: Modifier = Modifier) {
+private fun ToolPill(name: String, done: Boolean, modifier: Modifier = Modifier) {
+    val label = toolLabel(name)
     Surface(
         color = if (done) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = if (done) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
@@ -275,8 +380,15 @@ private fun ToolPill(icon: ImageVector, text: String, done: Boolean, modifier: M
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-            Text(text, style = MaterialTheme.typography.labelLarge)
+            Icon(label.icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Text(label.text, style = MaterialTheme.typography.labelLarge)
+            Crossfade(done, label = "toolDone") { finished ->
+                if (finished) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = "Done", modifier = Modifier.size(18.dp))
+                } else {
+                    LoadingIndicator(Modifier.size(22.dp))
+                }
+            }
         }
     }
 }
@@ -293,7 +405,29 @@ private fun Bubble(text: String, fromUser: Boolean, modifier: Modifier = Modifie
             contentColor = if (fromUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.widthIn(max = 320.dp).animateContentSize(),
         ) {
-            Text(text, Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                if (fromUser) AnnotatedString(text) else markdown(text),
+                Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
+    }
+}
+
+private val boldSpan = Regex("\\*\\*(.+?)\\*\\*")
+private val bulletPrefix = Regex("^\\s*[*-]\\s+")
+
+/** Renders the small Markdown subset the model uses: bullets and bold. */
+private fun markdown(text: String): AnnotatedString = buildAnnotatedString {
+    text.lines().forEachIndexed { i, raw ->
+        if (i > 0) append('\n')
+        val line = raw.replace(bulletPrefix, "• ")
+        var last = 0
+        boldSpan.findAll(line).forEach { m ->
+            append(line.substring(last, m.range.first))
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(m.groupValues[1]) }
+            last = m.range.last + 1
+        }
+        append(line.substring(last))
     }
 }
