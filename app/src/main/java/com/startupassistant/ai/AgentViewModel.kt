@@ -133,7 +133,8 @@ class AgentViewModel : ViewModel() {
             }
             if (!ready) throw NoFunctionCallingModel()
             val features = withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.getAvailableFeatures() }
-            Log.i(TAG, "Gemini Nano 4 Fast features=$features")
+            val name = withTimeoutOrNull(PROBE_TIMEOUT_MS) { model.getBaseModelName() }
+            Log.i(TAG, "Gemini Nano 4 Fast base model=$name features=$features")
             if (features != null && Feature.FUNCTION_CALLING !in features) throw NoFunctionCallingModel()
             return model
         } catch (e: Exception) {
