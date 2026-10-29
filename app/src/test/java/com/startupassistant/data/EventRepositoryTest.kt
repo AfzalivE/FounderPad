@@ -8,6 +8,7 @@ import org.junit.Test
 class EventRepositoryTest {
     private val today = LocalDate.of(2026, 1, 10)
     private val repo = MockEventRepository(today)
+    private val discoveryService = FounderEventDiscoveryService()
 
     @Test
     fun returnsUpcomingEventsSoonestFirst() {
@@ -24,5 +25,34 @@ class EventRepositoryTest {
         assertTrue(repo.search(EventQuery(city = "toronto")).all { it.city == "Toronto" })
         assertTrue(repo.search(EventQuery(onlineOnly = true)).all { it.online })
         assertTrue(repo.search(EventQuery(freeOnly = true)).all { it.priceUsd == 0 })
+    }
+
+    @Test
+    fun mapsFounderEventToStartupEvent() {
+        val founderEvent = FounderEvent(
+            id = "evt-test-1",
+            title = "Mountain View AI Cofounder Mixer",
+            category = "Cofounder_Meetup",
+            dateAndTime = "2026-10-30T01:00:00.000Z",
+            locationOrVenue = "Mountain View, CA",
+            hostOrOrganizer = "Bay Area Builders",
+            registrationUrl = "https://lu.ma/mv-ai-mixer",
+            matchRationale = "Direct match for AI founders in Mountain View.",
+            sourcePlatform = "Luma",
+        )
+        val startupEvent = founderEvent.toStartupEvent(today)
+        assertEquals("evt-test-1", startupEvent.id)
+        assertEquals(EventCategory.NETWORKING, startupEvent.category)
+        assertEquals("Mountain View, CA", startupEvent.city)
+        assertEquals("https://lu.ma/mv-ai-mixer", startupEvent.registrationUrl)
+        assertEquals("Luma", startupEvent.sourcePlatform)
+    }
+
+    @Test
+    fun mapsCityToRealLumaDiscoverId() {
+        assertEquals("discplace-BDj7GNbGlsF7Cka", discoveryService.mapCityToLumaDiscoverId("Mountain View, CA"))
+        assertEquals("discplace-BDj7GNbGlsF7Cka", discoveryService.mapCityToLumaDiscoverId("San Francisco"))
+        assertEquals("discplace-Izx1rQVSh8njYpP", discoveryService.mapCityToLumaDiscoverId("New York"))
+        assertEquals("discplace-Cx3JMS6vXKAbhV5", discoveryService.mapCityToLumaDiscoverId("Toronto"))
     }
 }

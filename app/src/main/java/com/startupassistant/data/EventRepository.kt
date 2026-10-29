@@ -5,15 +5,81 @@ import com.startupassistant.data.EventCategory.NETWORKING
 import com.startupassistant.data.EventCategory.OFFICE_SPACE
 import com.startupassistant.data.EventCategory.WORKSHOP
 import java.time.LocalDate
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 interface EventRepository {
     fun search(query: EventQuery): List<StartupEvent>
+
+    val eventsFlow: StateFlow<List<StartupEvent>>
+        get() = MutableStateFlow(search(EventQuery())).asStateFlow()
+
+    suspend fun refresh(
+        targetCity: String = "San Francisco",
+        coreSkill: String = "",
+        missionAndValueProp: String = "",
+    ): List<StartupEvent> = search(EventQuery(city = targetCity, text = coreSkill))
 }
 
 /**
- * Mock event source. The Luma API needs a Luma Plus plan and only reads
- * calendars you own, so it cannot search public events. Replace this class
- * with a real source (Luma calendars you subscribe to, Eventbrite, Meetup).
+ * Live event repository backed by [FounderEventDiscoveryService] (Engine 1: Firebase AI Logic
+ * with Google Search Grounding; Engine 2: Unauthenticated Luma Public Discovery API),
+ * with automatic fallback to [MockEventRepository] seed data when offline.
+ */
+class LiveEventRepository(
+    private val discoveryService: FounderEventDiscoveryService = FounderEventDiscoveryService(),
+    private val fallback: EventRepository = MockEventRepository(),
+    private val today: LocalDate = LocalDate.now(),
+) : EventRepository {
+
+    private val _eventsFlow = MutableStateFlow(fallback.search(EventQuery()))
+    override val eventsFlow: StateFlow<List<StartupEvent>> = _eventsFlow.asStateFlow()
+
+    override suspend fun refresh(
+        targetCity: String,
+        coreSkill: String,
+        missionAndValueProp: String,
+    ): List<StartupEvent> {
+        val discovered = runCatching {
+            discoveryService.discoverFounderEvents(
+                targetCity = targetCity.ifBlank { "San Francisco" },
+                coreSkill = coreSkill,
+                missionAndValueProp = missionAndValueProp,
+            )
+        }.getOrDefault(emptyList())
+
+        if (discovered.isNotEmpty()) {
+            val mapped = discovered.mapIndexed { idx, fe ->
+                fe.toStartupEvent(referenceDate = today, indexOffset = idx)
+            }
+            val combined = (mapped + fallback.search(EventQuery()))
+                .distinctBy { it.id.lowercase() }
+            _eventsFlow.value = combined
+        }
+        return _eventsFlow.value
+    }
+
+    override fun search(query: EventQuery): List<StartupEvent> {
+        val text = query.text?.trim()?.lowercase().orEmpty()
+        val city = query.city?.trim()?.lowercase().orEmpty()
+        return _eventsFlow.value
+            .filter { query.category == null || it.category == query.category }
+            .filter { !query.onlineOnly || it.online }
+            .filter { !query.freeOnly || it.priceUsd == 0 }
+            .filter { city.isEmpty() || it.city.lowercase().contains(city) }
+            .filter { e ->
+                text.isEmpty() ||
+                    (listOf(e.title, e.description, e.host, e.sourcePlatform) + e.tags).any {
+                        it.lowercase().contains(text)
+                    }
+            }
+            .sortedBy { it.startsAt }
+    }
+}
+
+/**
+ * Seed/fallback event source used for unit tests and offline fallback.
  */
 class MockEventRepository(today: LocalDate = LocalDate.now()) : EventRepository {
 

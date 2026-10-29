@@ -68,6 +68,9 @@ dependencies {
     implementation(libs.mlkit.genai.agent)
     implementation(libs.mlkit.genai.rewriting)
 
+    // Hybrid Cloud Grounding: Firebase AI Logic (Google Search Grounding)
+    implementation(libs.firebase.ai)
+
     // AppFunctions: tools for the in-app agent and for the Gemini app
     implementation(libs.androidx.appfunctions)
     ksp(libs.androidx.appfunctions.compiler)

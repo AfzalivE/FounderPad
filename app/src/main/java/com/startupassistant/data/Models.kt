@@ -22,6 +22,8 @@ data class StartupEvent(
     val host: String,
     val priceUsd: Int, // 0 = free
     val tags: List<String>,
+    val registrationUrl: String = "",
+    val sourcePlatform: String = "Seed",
 )
 
 data class EventQuery(

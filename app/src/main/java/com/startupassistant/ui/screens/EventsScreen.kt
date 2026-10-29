@@ -10,10 +10,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.startupassistant.AppGraph
 import com.startupassistant.data.EventCategory
 import com.startupassistant.data.EventQuery
@@ -34,7 +37,23 @@ fun EventsScreen(modifier: Modifier = Modifier) {
     var text by rememberSaveable { mutableStateOf("") }
     var city by rememberSaveable { mutableStateOf("") }
     var freeOnly by rememberSaveable { mutableStateOf(false) }
-    val events = remember(category, text, city, freeOnly) {
+    var loadingLive by remember { mutableStateOf(false) }
+    val allEvents by AppGraph.events.eventsFlow.collectAsStateWithLifecycle()
+
+    LaunchedEffect(city, text) {
+        loadingLive = true
+        try {
+            AppGraph.events.refresh(
+                targetCity = city.ifBlank { "San Francisco" },
+                coreSkill = text,
+                missionAndValueProp = text,
+            )
+        } finally {
+            loadingLive = false
+        }
+    }
+
+    val events = remember(allEvents, category, text, city, freeOnly) {
         AppGraph.events.search(EventQuery(text = text, category = category, city = city, freeOnly = freeOnly))
     }
 
@@ -44,7 +63,10 @@ fun EventsScreen(modifier: Modifier = Modifier) {
     ) {
         item {
             ScreenHeader("Events", "Meet other founders, find investors and find a place to work.")
-            SampleDataNote("The Luma API needs a paid plan and shows only your own calendars.")
+            SampleDataNote("Powered by Firebase AI Google Search Grounding & live Luma public discovery.")
+            if (loadingLive) {
+                LinearProgressIndicator(Modifier.fillMaxWidth().padding(bottom = 8.dp))
+            }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = category == null, onClick = { category = null }, label = { Text("All") })
                 EventCategory.entries.forEach { c ->
@@ -68,7 +90,7 @@ fun EventsScreen(modifier: Modifier = Modifier) {
                 )
                 Text(e.description, Modifier.padding(top = 4.dp))
                 Text(
-                    "${e.category.label} · ${e.host} · " + e.tags.joinToString(" ") { "#$it" },
+                    "${e.category.label} · ${e.host} · ${e.sourcePlatform} · " + e.tags.joinToString(" ") { "#$it" },
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 )
