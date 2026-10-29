@@ -1,9 +1,14 @@
 package com.startupassistant.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,6 +99,17 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
 
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp).imePadding()) {
         ScreenHeader("Ask", "An agent that runs on your phone with Gemini Nano.", Icons.Filled.AutoAwesome, TabShapes.ask)
+        // Model status, for example while Gemini Nano downloads.
+        AnimatedVisibility(state.status != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            ) {
+                Text(state.status.orEmpty(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+            }
+        }
 
         LazyColumn(
             state = listState,
