@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -124,21 +123,6 @@ fun ScreenHeader(title: String, subtitle: String, icon: ImageVector, polygon: Ro
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.headlineLarge)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun SampleDataNote(text: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).enterStagger(1),
-    ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text("Sample data. $text", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

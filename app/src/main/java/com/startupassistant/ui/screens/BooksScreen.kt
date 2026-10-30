@@ -103,7 +103,6 @@ fun BooksScreen(modifier: Modifier = Modifier) {
         item(key = "header") {
             Column {
                 ScreenHeader("Books", "Record money in and out. See your burn rate and your runway.", Icons.Filled.AccountBalanceWallet, TabShapes.books)
-                SampleDataNote("There is no free bookkeeping API, so data is kept in memory.")
                 CashHero(
                     cashCents = summary.cashBalanceCents,
                     burnCents = summary.averageMonthlyBurnCents,

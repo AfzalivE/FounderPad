@@ -110,7 +110,6 @@ fun EventsScreen(modifier: Modifier = Modifier) {
         item(key = "header") {
             Column {
                 ScreenHeader("Events", "Meet other founders, find investors and find a place to work.", Icons.Filled.Event, TabShapes.events)
-                SampleDataNote("Powered by Firebase AI Google Search Grounding & live Luma public discovery.")
                 if (loadingLive) {
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(bottom = 8.dp))
                 }
