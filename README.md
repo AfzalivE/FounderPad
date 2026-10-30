@@ -5,7 +5,7 @@ An Android app that helps a new founder get started. It has an on-device agent
 The same AppFunctions are available to the Gemini app through the Connected
 Apps platform.
 
-[![FounderPad launch video](docs/screenshots/launch-preview.gif)](docs/screenshots/launch.mp4)
+[![FounderPad launch video](docs/screenshots/launch-preview.avif)](docs/screenshots/launch.mp4)
 
 Watch the [launch video](docs/screenshots/launch.mp4) (1 min) or the
 [full demo recording](docs/screenshots/demo.mp4) (2 min).
