@@ -35,6 +35,10 @@ data class EventInfo(
     val category: String,
     /** One-sentence summary. */
     val description: String,
+    /** Direct registration URL on Luma, Meetup, Eventbrite or the web. */
+    val registrationUrl: String,
+    /** Source platform, for example "Luma" or "Google Search Grounded". */
+    val sourcePlatform: String,
 )
 
 /** Result of an event search. */
@@ -42,7 +46,7 @@ data class EventInfo(
 data class EventSearchResult(
     /** Matching events, soonest first. Empty when nothing matches. */
     val events: List<EventInfo>,
-    /** Short note for the user, for example that the data is sample data. */
+    /** Short note for the user describing the event source. */
     val note: String,
 )
 
@@ -140,6 +144,13 @@ abstract class StartupTools : AppFunctionService() {
         freeOnly: Boolean = false,
     ): EventSearchResult {
         val online = city?.equals("online", ignoreCase = true) == true
+        if (!online) {
+            AppGraph.events.refresh(
+                targetCity = city ?: "San Francisco",
+                coreSkill = topic.orEmpty(),
+                missionAndValueProp = topic.orEmpty(),
+            )
+        }
         val events = AppGraph.events.search(
             EventQuery(
                 text = topic,
@@ -149,9 +160,14 @@ abstract class StartupTools : AppFunctionService() {
                 freeOnly = freeOnly,
             ),
         )
+        val hasLive = events.any { it.sourcePlatform != "Seed" }
         return EventSearchResult(
             events = events.take(MAX_RESULTS).map { it.toInfo() },
-            note = "Sample events. A live event source is not connected yet.",
+            note = if (hasLive) {
+                "Live events discovered via Luma & Firebase AI Google Search Grounding."
+            } else {
+                "Offline seed events shown while live discovery is unavailable."
+            },
         )
     }
 
@@ -284,6 +300,8 @@ abstract class StartupTools : AppFunctionService() {
                 EventCategory.WORKSHOP -> "workshop"
             },
             description = description,
+            registrationUrl = registrationUrl,
+            sourcePlatform = sourcePlatform,
         )
 
         fun parseCategory(value: String?): EventCategory? = when (value?.trim()?.lowercase()) {

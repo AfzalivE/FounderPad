@@ -94,7 +94,6 @@ fun HiringScreen(modifier: Modifier = Modifier) {
         item(key = "header") {
             Column {
                 ScreenHeader("Hiring", "Plan your first hires, write a job post and see who is available.", Icons.Filled.Groups, TabShapes.hiring)
-                SampleDataNote("There is no free salary or candidate API.")
                 Row(
                     Modifier.horizontalScroll(rememberScrollState()).enterStagger(2),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

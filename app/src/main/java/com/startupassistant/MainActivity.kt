@@ -14,6 +14,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -90,7 +91,8 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     AnimatedContent(
                         targetState = tab,
-                        modifier = Modifier.padding(padding),
+                        // Consume the bottom bar's space so imePadding in Ask adds only the rest.
+                        modifier = Modifier.padding(padding).consumeWindowInsets(padding),
                         transitionSpec = {
                             // Slide in the direction of the tab, like pages.
                             val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1

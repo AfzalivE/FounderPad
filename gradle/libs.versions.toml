@@ -12,6 +12,7 @@ graphicsShapes = "1.0.1"
 coroutines = "1.10.2"
 mlkitAgent = "1.0.0-alpha1"
 mlkitRewriting = "1.0.0-beta1"
+firebaseAi = "18.1.0"
 appfunctions = "1.0.0-alpha13"
 junit = "4.13.2"
 
@@ -32,6 +33,7 @@ kotlinx-coroutines-guava = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 mlkit-genai-agent = { module = "com.google.mlkit:genai-agent", version.ref = "mlkitAgent" }
 mlkit-genai-rewriting = { module = "com.google.mlkit:genai-rewriting", version.ref = "mlkitRewriting" }
+firebase-ai = { module = "com.google.firebase:firebase-ai", version.ref = "firebaseAi" }
 androidx-appfunctions = { module = "androidx.appfunctions:appfunctions", version.ref = "appfunctions" }
 androidx-appfunctions-compiler = { module = "androidx.appfunctions:appfunctions-compiler", version.ref = "appfunctions" }
 junit = { module = "junit:junit", version.ref = "junit" }

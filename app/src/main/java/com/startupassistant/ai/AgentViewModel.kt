@@ -53,7 +53,7 @@ data class AgentUiState(
 )
 
 private const val INSTRUCTIONS = """
-You are Startup Assistant, an on-device helper for people who want to start a company.
+You are FounderPad, an on-device helper for people who want to start a company.
 You help with three things: finding events (people, funding, office space), hiring the
 first team, and keeping the books. Always use a tool to get facts. Never invent events,
 salaries, candidates or numbers. Keep answers short: at most five bullet points.
@@ -103,7 +103,7 @@ class AgentViewModel : ViewModel() {
             if (WRITE_TOOLS.any { tool.name.endsWith(it) }) ConfirmingTool(tool, ::askUser) else tool
         }
         val agent = Agent.builder()
-            .setName("StartupAssistant")
+            .setName("FounderPad")
             // The model has no clock, so give it today's date for add_transaction.
             .setInstructions(INSTRUCTIONS.trimIndent() + "\nToday is ${LocalDate.now()}.")
             .addTools(tools)
