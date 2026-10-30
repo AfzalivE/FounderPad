@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --ground: #141c33;
+        --ground-2: #24345a;
+        --ink: #ffffff;
+        --muted: #aeb8d6;
+        --flame: #ff8a3d;
+        --flame-2: #ffc15e;
+        --lavender: #cbb8f5;
+        --mint: #7fe0c8;
+        --font-display: "Outfit", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px; height: 1080px; overflow: hidden;
+        background: var(--ground);
+        font-family: var(--font-display);
+        color: var(--ink);
+      }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; }
+      .clip { position: absolute; inset: 0; }
+
+      /* Background */
+      #bg {
+        background: radial-gradient(1200px 800px at 75% 40%, var(--ground-2), var(--ground) 70%);
+      }
+      .glow {
+        position: absolute; width: 900px; height: 900px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,138,61,0.28), rgba(255,138,61,0) 65%);
+        left: 1000px; top: 200px;
+      }
+      .glow.b {
+        background: radial-gradient(circle, rgba(203,184,245,0.22), rgba(203,184,245,0) 65%);
+        left: -200px; top: 400px;
+      }
+
+      /* Intro */
+      #intro { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      #intro .icon { width: 260px; height: 260px; border-radius: 64px; box-shadow: 0 40px 120px rgba(0,0,0,0.5); }
+      #intro h1 { font-size: 150px; font-weight: 800; letter-spacing: -0.045em; margin-top: 48px; line-height: 1; }
+      #intro h1 span { display: inline-block; }
+      #intro p { font-size: 44px; font-weight: 500; color: var(--muted); margin-top: 28px; }
+      #intro p b { color: var(--flame); font-weight: 700; }
+
+      /* Problem */
+      #problem { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+      #problem .lead { font-size: 64px; font-weight: 700; letter-spacing: -0.03em; }
+      #problem .words { display: flex; gap: 40px; margin-top: 56px; }
+      #problem .word {
+        font-size: 96px; font-weight: 800; letter-spacing: -0.04em;
+        padding: 18px 44px; border-radius: 999px;
+      }
+      #problem .w1 { background: var(--lavender); color: #2a1a6e; }
+      #problem .w2 { background: var(--mint); color: #08392f; }
+      #problem .w3 { background: var(--flame); color: #3a1500; }
+      #problem .tail { font-size: 44px; color: var(--muted); margin-top: 56px; font-weight: 500; }
+
+      /* Feature scenes */
+      .feature .copy { position: absolute; left: 150px; top: 0; bottom: 0; width: 860px; display: flex; flex-direction: column; justify-content: center; }
+      .feature.flip .copy { left: auto; right: 150px; }
+      .kicker { font-family: var(--font-mono); font-size: 30px; color: var(--flame); letter-spacing: 0.06em; text-transform: uppercase; }
+      .feature h2 { font-size: 92px; font-weight: 800; letter-spacing: -0.045em; line-height: 1.02; margin-top: 22px; }
+      .feature h2 em { font-style: normal; background: linear-gradient(90deg, var(--flame), var(--flame-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .feature .sub { font-size: 36px; font-weight: 500; color: var(--muted); margin-top: 30px; line-height: 1.35; }
+      .chips { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 40px; }
+      .chip {
+        font-family: var(--font-mono); font-size: 28px; padding: 12px 24px; border-radius: 999px;
+        background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.18); color: var(--ink);
+      }
+      .chip.hot { background: rgba(255,138,61,0.16); border-color: rgba(255,138,61,0.6); color: #ffd2b3; }
+      .phone {
+        position: absolute; top: 58px; right: 250px; width: 430px; height: 965px;
+        border-radius: 58px; padding: 12px; background: #05070d;
+        box-shadow: 0 50px 140px rgba(0,0,0,0.55), 0 0 0 2px rgba(255,255,255,0.08);
+        opacity: 0; z-index: 5;
+      }
+      .phone.flip { right: auto; left: 250px; }
+      .phone .screen { position: relative; width: 100%; height: 100%; border-radius: 46px; overflow: hidden; background: #111; }
+      .phone video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+      /* Outro */
+      #outro { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+      #outro .icon { width: 180px; height: 180px; border-radius: 46px; }
+      #outro h1 { font-size: 120px; font-weight: 800; letter-spacing: -0.045em; margin-top: 36px; }
+      #outro .stack { display: flex; gap: 16px; margin-top: 44px; }
+      #outro .note { font-size: 32px; color: var(--muted); margin-top: 48px; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="61.5" data-width="1920" data-height="1080">
+
+      <div id="bg" class="clip" data-start="0" data-duration="61.5" data-track-index="0">
+        <div class="glow a"></div>
+        <div class="glow b"></div>
+      </div>
+
+      <!-- 0: intro -->
+      <div id="intro" class="clip" data-start="0" data-duration="4.6" data-track-index="1">
+        <img class="icon" src="assets/icon.png" alt="" />
+        <h1><span>Founder</span><span>Pad</span></h1>
+        <p>Your startup co-pilot. <b>On your phone.</b></p>
+      </div>
+
+      <!-- 1: problem -->
+      <div id="problem" class="clip" data-start="4.6" data-duration="3.8" data-track-index="1">
+        <div class="lead">Starting a company means juggling</div>
+        <div class="words">
+          <div class="word w1">events</div>
+          <div class="word w2">hiring</div>
+          <div class="word w3">money</div>
+        </div>
+        <div class="tail">One app. One agent.</div>
+      </div>
+
+      <!-- 2: on-device agent -->
+      <div id="f1" class="feature clip" data-start="8.4" data-duration="8.6" data-track-index="1">
+        <div class="copy">
+          <div class="kicker">01 · Ask</div>
+          <h2>An agent that runs <em>on your phone</em></h2>
+          <div class="sub">Gemini Nano runs right on the phone. Ask a question and get real cards back, not walls of text.</div>
+          <div class="chips"><span class="chip hot">Gemini Nano 4 Fast</span><span class="chip">Private</span><span class="chip">On-device</span></div>
+        </div>
+      </div>
+
+      <!-- 3: AppFunctions -->
+      <div id="f2" class="feature flip clip" data-start="17" data-duration="10" data-track-index="1">
+        <div class="copy">
+          <div class="kicker">02 · It does the work</div>
+          <h2>One ask. <em>Many steps.</em></h2>
+          <div class="sub">Ask for a job post. It checks what to pay, then writes the post for you. The Gemini app can use the same actions.</div>
+          <div class="chips"><span class="chip hot">Checks salaries</span><span class="chip">Writes the post</span><span class="chip">Works with Gemini</span></div>
+        </div>
+      </div>
+
+      <!-- 4: human in the loop -->
+      <div id="f3" class="feature clip" data-start="27" data-duration="7.5" data-track-index="1">
+        <div class="copy">
+          <div class="kicker">03 · You stay in control</div>
+          <h2>It asks <em>before it writes</em></h2>
+          <div class="sub">Say "log a $49 Figma bill". It shows you the entry and waits for your OK.</div>
+          <div class="chips"><span class="chip hot">Human in the loop</span><span class="chip">Confirm first</span></div>
+        </div>
+      </div>
+
+      <!-- 5: events -->
+      <div id="f4" class="feature flip clip" data-start="34.5" data-duration="6.5" data-track-index="1">
+        <div class="copy">
+          <div class="kicker">04 · Events</div>
+          <h2>Live events to <em>meet people</em></h2>
+          <div class="sub">Founder meetups, funding talks and office space, from Luma and Google Search grounding.</div>
+          <div class="chips"><span class="chip hot">Firebase AI Logic</span><span class="chip">Search grounding</span><span class="chip">Luma</span></div>
+        </div>
+      </div>
+
+      <!-- 6: hiring -->
+      <div id="f5" class="feature clip" data-start="41" data-duration="8" data-track-index="1">
+        <div class="copy">
+          <div class="kicker">05 · Hiring</div>
+          <h2>Your first hires, <em>planned</em></h2>
+          <div class="sub">Salary and equity ranges by role, level and city. Write a job post, then rewrite it on device.</div>
+          <div class="chips"><span class="chip hot">Rewrite on device</span><span class="chip">Professional</span><span class="chip">Friendly</span><span class="chip">Shorter</span></div>
+        </div>
+      </div>
+
+      <!-- 7: books -->
+      <div id="f6" class="feature flip clip" data-start="49" data-duration="6.5" data-track-index="1">
+        <div class="copy">
+          <div class="kicker">06 · Books</div>
+          <h2>Know your <em>runway</em></h2>
+          <div class="sub">Money in and out, sorted into categories. Cash, burn and runway at a glance.</div>
+          <div class="chips"><span class="chip hot">Auto-categorized</span><span class="chip">Burn rate</span><span class="chip">Runway</span></div>
+        </div>
+      </div>
+
+      <div id="p1" class="phone"><div class="screen">
+        <video id="v1" class="clip" data-start="8.4" data-duration="8.3" muted playsinline src="assets/c1.mp4"></video>
+      </div></div>
+      <div id="p2" class="phone flip"><div class="screen">
+        <video id="v2" class="clip" data-start="17" data-duration="9.7" muted playsinline src="assets/c2.mp4"></video>
+      </div></div>
+      <div id="p3" class="phone"><div class="screen">
+        <video id="v3" class="clip" data-start="27" data-duration="7.2" muted playsinline src="assets/c3.mp4"></video>
+      </div></div>
+      <div id="p4" class="phone flip"><div class="screen">
+        <video id="v4" class="clip" data-start="34.5" data-duration="6.2" muted playsinline src="assets/c4.mp4"></video>
+      </div></div>
+      <div id="p5" class="phone"><div class="screen">
+        <video id="v5" class="clip" data-start="41" data-duration="7.7" muted playsinline src="assets/c5.mp4"></video>
+      </div></div>
+      <div id="p6" class="phone flip"><div class="screen">
+        <video id="v6" class="clip" data-start="49" data-duration="6.2" muted playsinline src="assets/c6.mp4"></video>
+      </div></div>
+
+      <!-- 8: outro -->
+      <div id="outro" class="clip" data-start="55.5" data-duration="6" data-track-index="1">
+        <img class="icon" src="assets/icon.png" alt="" />
+        <h1>FounderPad</h1>
+        <div class="stack">
+          <span class="chip hot">AppFunctions</span><span class="chip">ML Kit GenAI</span><span class="chip">Gemini Nano</span><span class="chip">Firebase AI Logic</span>
+        </div>
+        <div class="note">Built for the Android Dev Summit hackathon</div>
+      </div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const ease = "power3.out";
+
+      // Background drift
+      tl.fromTo(".glow.a", { x: 0, y: 0 }, { x: -260, y: 80, duration: 61.5, ease: "none" }, 0);
+      tl.fromTo(".glow.b", { x: 0, y: 0 }, { x: 300, y: -160, duration: 61.5, ease: "none" }, 0);
+
+      // Intro: rocket launches in, title snaps up
+      tl.fromTo("#intro .icon", { y: 140, x: -90, rotation: -10, scale: 0.85, opacity: 1 }, { y: 0, x: 0, rotation: 0, scale: 1, opacity: 1, duration: 1.0, ease: "back.out(1.4)" }, 0);
+      tl.fromTo("#intro h1 span", { y: 90, opacity: 0, filter: "blur(10px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.7, stagger: 0.12, ease }, 0.9);
+      tl.fromTo("#intro p", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease }, 1.6);
+      tl.to("#intro .icon", { y: -900, x: 500, rotation: 8, duration: 0.7, ease: "power3.in" }, 3.8);
+      tl.to(["#intro h1", "#intro p"], { opacity: 0, y: -30, duration: 0.4, ease: "power2.in" }, 4.1);
+
+      // Problem
+      tl.fromTo("#problem .lead", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, 4.7);
+      tl.fromTo("#problem .word", { scale: 0.4, opacity: 0, rotation: -6 }, { scale: 1, opacity: 1, rotation: 0, duration: 0.5, stagger: 0.18, ease: "back.out(2)" }, 5.0);
+      tl.fromTo("#problem .tail", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, 5.9);
+      tl.to("#problem", { opacity: 0, scale: 0.96, duration: 0.4, ease: "power2.in" }, 8.0);
+
+      // Feature scenes share one enter/exit
+      function feature(id, start, dur) {
+        const phone = "#p" + id.slice(2);
+        const flip = document.querySelector(phone).classList.contains("flip");
+        tl.fromTo(phone, { y: 160, opacity: 0, rotation: flip ? -4 : 4 }, { y: 0, opacity: 1, rotation: 0, duration: 0.8, ease, immediateRender: id === "#f1" }, start);
+        tl.fromTo(`${id} .kicker`, { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease }, start + 0.15);
+        tl.fromTo(`${id} h2`, { y: 50, opacity: 0, filter: "blur(8px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.6, ease }, start + 0.25);
+        tl.fromTo(`${id} .sub`, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease }, start + 0.55);
+        tl.fromTo(`${id} .chip`, { y: 20, opacity: 0, scale: 0.9 }, { y: 0, opacity: 1, scale: 1, duration: 0.35, stagger: 0.07, ease: "back.out(2)" }, start + 0.8);
+        tl.to(`${id} .copy`, { opacity: 0, y: -24, duration: 0.35, ease: "power2.in" }, start + dur - 0.4);
+        tl.to(phone, { opacity: 0, y: -60, duration: 0.4, ease: "power2.in" }, start + dur - 0.4);
+      }
+      feature("#f1", 8.4, 8.6);
+      feature("#f2", 17, 10);
+      feature("#f3", 27, 7.5);
+      feature("#f4", 34.5, 6.5);
+      feature("#f5", 41, 8);
+      feature("#f6", 49, 6.5);
+
+      // Outro
+      tl.fromTo("#outro .icon", { y: 300, scale: 0.6, opacity: 0, rotation: -12 }, { y: 0, scale: 1, opacity: 1, rotation: 0, duration: 0.9, ease: "back.out(1.5)" }, 55.6);
+      tl.fromTo("#outro h1", { y: 60, opacity: 0, filter: "blur(10px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.6, ease }, 56);
+      tl.fromTo("#outro .chip", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, stagger: 0.1, ease: "back.out(2)" }, 56.5);
+      tl.fromTo("#outro .note", { opacity: 0 }, { opacity: 1, duration: 0.6, ease }, 57.1);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

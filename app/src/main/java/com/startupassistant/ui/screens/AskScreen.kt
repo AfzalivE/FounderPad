@@ -64,6 +64,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -196,10 +198,16 @@ fun AskScreen(modifier: Modifier = Modifier, vm: AgentViewModel = viewModel()) {
         if (!empty && count > 0) listState.animateScrollToItem(count - 1)
     }
 
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+
     fun send(text: String) {
         if (text.isBlank() || state.busy) return
         vm.send(text)
         input = ""
+        // Hide the keyboard so the tool calls and cards are visible.
+        keyboard?.hide()
+        focus.clearFocus()
     }
 
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp).imePadding()) {
